@@ -1,0 +1,48 @@
+name: Despliegue a Elastic Beanstalk
+
+on:
+  push:
+    branches: [ "main", "master" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'corretto'
+          java-version: '17'
+
+      - name: Compilar con Maven
+        run: ./mvnw clean package -DskipTests
+
+      - name: Configurar credenciales AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_session_token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Preparar artefacto
+        run: |
+          mkdir deploy
+          cp target/*.jar deploy/app.jar
+          cp Procfile deploy/Procfile
+          cd deploy && zip -r ../deploy.zip .
+
+      - name: Desplegar en Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v22
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_session_token: ${{ secrets.AWS_SESSION_TOKEN }}
+          application_name: dam-ci-cd-api-001
+          environment_name: Dam-ci-cd-api-001-env
+          region: us-east-1
+          version_label: v-${{ github.run_id }}
+          deployment_package: deploy.zip
